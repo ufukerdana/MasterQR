@@ -20,7 +20,18 @@ export const translations = {
         scanFromImage: 'Scan Image',
         noQrInImage: 'No QR code found in selected image.',
         batchScanSaved: 'Saved to history',
-        flip: 'Flip Camera'
+        flip: 'Flip Camera',
+        ar: {
+            open: 'Open Link',
+            copy: 'Copy Text',
+            connect: 'Connect Wi-Fi',
+            view: 'View Details',
+            dial: 'Call',
+            email: 'Send Email',
+            add: 'Add Contact',
+            play: 'Play Audio',
+            unlock: 'Unlock'
+        }
     },
     generate: {
         title: 'Create QR Code',
@@ -39,6 +50,17 @@ export const translations = {
             label: 'Password Protect',
             placeholder: 'Set Password',
             hint: 'Content will be encrypted. Password required to view.'
+        },
+        expiry: {
+            label: 'Self Destruct',
+            hint: 'QR code will expire after selected time.',
+            options: {
+                min1: '1 Minute',
+                min5: '5 Minutes',
+                min10: '10 Minutes',
+                hour1: '1 Hour',
+                day1: '1 Day'
+            }
         },
         voice: {
             tapToRecord: 'Tap to Record',
@@ -97,6 +119,11 @@ export const translations = {
             unlock: 'Unlock',
             wrongPass: 'Incorrect Password',
             success: 'Unlocked Successfully'
+        },
+        expiry: {
+            title: 'Expired QR',
+            desc: 'This QR code has self-destructed and is no longer available.',
+            remaining: 'Expires in'
         }
     },
     history: {
@@ -107,7 +134,21 @@ export const translations = {
         clearConfirmTitle: 'Clear History?',
         clearConfirmDesc: 'This cannot be undone.',
         cancel: 'Cancel',
-        confirm: 'Clear'
+        confirm: 'Clear',
+        filters: {
+            all: 'All',
+            scan: 'Scanned',
+            generate: 'Created'
+        },
+        types: {
+            scan: 'Scan',
+            generate: 'Generate'
+        },
+        item: {
+            expired: 'Expired',
+            encrypted: '*** Encrypted ***',
+            contact: 'Contact Card'
+        }
     },
     common: {
         shareTitle: 'MasterQR Code',
@@ -134,7 +175,18 @@ export const translations = {
         scanFromImage: 'Resimden Tara',
         noQrInImage: 'Seçilen resimde QR kod bulunamadı.',
         batchScanSaved: 'Geçmişe kaydedildi',
-        flip: 'Kamerayı Çevir'
+        flip: 'Kamerayı Çevir',
+        ar: {
+            open: 'Siteye Git',
+            copy: 'Kopyala',
+            connect: 'Bağlan',
+            view: 'İncele',
+            dial: 'Ara',
+            email: 'E-posta',
+            add: 'Rehbere Ekle',
+            play: 'Oynat',
+            unlock: 'Kilidi Aç'
+        }
     },
     generate: {
         title: 'QR Kod Oluştur',
@@ -153,6 +205,17 @@ export const translations = {
             label: 'Şifre ile Koru',
             placeholder: 'Şifre Belirleyin',
             hint: 'İçerik şifrelenir. Görüntülemek için şifre gerekir.'
+        },
+        expiry: {
+            label: 'Kendini İmha Et',
+            hint: 'QR kod seçilen süre sonunda silinir.',
+            options: {
+                min1: '1 Dakika',
+                min5: '5 Dakika',
+                min10: '10 Dakika',
+                hour1: '1 Saat',
+                day1: '1 Gün'
+            }
         },
         voice: {
             tapToRecord: 'Kaydet',
@@ -211,6 +274,11 @@ export const translations = {
             unlock: 'Kilidi Aç',
             wrongPass: 'Hatalı Şifre',
             success: 'Kilit Açıldı'
+        },
+        expiry: {
+            title: 'Süresi Dolmuş QR',
+            desc: 'Bu QR kodun süresi doldu ve artık erişilemez.',
+            remaining: 'Kalan Süre'
         }
     },
     history: {
@@ -221,7 +289,21 @@ export const translations = {
         clearConfirmTitle: 'Geçmişi Temizle?',
         clearConfirmDesc: 'Bu işlem geri alınamaz.',
         cancel: 'İptal',
-        confirm: 'Temizle'
+        confirm: 'Temizle',
+        filters: {
+            all: 'Tümü',
+            scan: 'Tarananlar',
+            generate: 'Üretilenler'
+        },
+        types: {
+            scan: 'Tarama',
+            generate: 'Üretim'
+        },
+        item: {
+            expired: 'Süresi Doldu',
+            encrypted: '*** Şifreli ***',
+            contact: 'Kişi Kartı'
+        }
     },
     common: {
         shareTitle: 'MasterQR Kodu',

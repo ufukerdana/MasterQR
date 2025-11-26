@@ -14,6 +14,7 @@ export interface HistoryItem {
   text: string;
   type: ScanType;
   timestamp: number;
+  expiresAt?: number | null;
   meta?: QrMeta;
   source?: 'scan' | 'generate';
 }
