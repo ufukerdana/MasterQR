@@ -1,17 +1,21 @@
+
 import React from 'react';
-import { Trash2, Download, FileText, Wifi, Globe, Link, Clock } from 'lucide-react';
+import { Trash2, Download, FileText, Wifi, Globe, Link, Clock, Contact } from 'lucide-react';
 import { translations } from '../translations';
 import { HistoryItem, ScanType } from '../types';
 
 interface HistoryProps {
   history: HistoryItem[];
   onClear: () => void;
-  onItemClick: (text: string) => void;
+  onItemClick: (item: HistoryItem) => void;
   t: typeof translations['en']['history'];
 }
 
 const History: React.FC<HistoryProps> = ({ history, onClear, onItemClick, t }) => {
   const [showConfirm, setShowConfirm] = React.useState(false);
+
+  // New State for Segmented Control
+  const [filter, setFilter] = React.useState<'all' | 'scan' | 'generate'>('all');
 
   const handleExport = () => {
     if (history.length === 0) return;
@@ -41,6 +45,7 @@ const History: React.FC<HistoryProps> = ({ history, onClear, onItemClick, t }) =
     switch (type) {
         case 'wifi': return <Wifi className="w-5 h-5" />;
         case 'url': return <Globe className="w-5 h-5" />;
+        case 'vcard': return <Contact className="w-5 h-5" />;
         default: return <FileText className="w-5 h-5" />;
     }
   };
@@ -49,6 +54,13 @@ const History: React.FC<HistoryProps> = ({ history, onClear, onItemClick, t }) =
     return new Date(timestamp).toLocaleString(undefined, {
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
+  };
+
+  const getVCardName = (text: string) => {
+     // Robust regex matching consistent with ResultModal
+     const fnMatch = text.match(/(?:^|\n)FN(?:;[^:]*?)?:([^\n\r]+)/i);
+     if (fnMatch) return fnMatch[1].trim();
+     return 'Contact Card';
   };
 
   return (
@@ -88,18 +100,21 @@ const History: React.FC<HistoryProps> = ({ history, onClear, onItemClick, t }) =
                 history.map((item) => (
                     <div 
                         key={item.id}
-                        onClick={() => onItemClick(item.text)}
+                        onClick={() => onItemClick(item)}
                         className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-4 active:scale-98 transition-transform cursor-pointer"
                     >
                         <div className={`p-3 rounded-full ${
                             item.type === 'wifi' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' :
                             item.type === 'url' ? 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400' :
+                            item.type === 'vcard' ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400' :
                             'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                         }`}>
                             {getIcon(item.type)}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{item.text}</p>
+                            <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                                {item.type === 'vcard' ? getVCardName(item.text) : item.text}
+                            </p>
                             <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">{formatDate(item.timestamp)}</p>
                         </div>
                     </div>

@@ -1,6 +1,8 @@
+
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats, Html5QrcodeScannerState } from 'html5-qrcode';
-import { AlertCircle, Image as ImageIcon, Layers, Zap } from 'lucide-react';
+import { AlertCircle, Image as ImageIcon, Layers, Zap, RotateCcw } from 'lucide-react';
 import { translations } from '../translations';
 
 interface ScannerProps {
@@ -15,6 +17,7 @@ interface ScannerProps {
 const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, batchMode, setBatchMode }) => {
   const [hasError, setHasError] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   
   // Refs for stable access in async callbacks without re-triggering effects
   const onScanRef = useRef(onScan);
@@ -24,6 +27,9 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, bat
   
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Lifecycle locks
+  const processingRef = useRef(false);
 
   // Update refs when props change
   useEffect(() => {
@@ -37,30 +43,50 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, bat
     const elementId = "reader";
 
     const cleanupScanner = async () => {
+      // If we are currently starting up, we must wait or the library throws "Uncaught" errors
+      if (processingRef.current) {
+          // Simple retry mechanism for cleanup if stuck in processing
+          return;
+      }
+
       if (!scannerRef.current) return;
 
       try {
+        processingRef.current = true;
         // Check state before stopping
-        const state = scannerRef.current.getState();
+        // Note: html5-qrcode can sometimes throw if you check state on an unmounted/cleared instance
+        let state;
+        try { state = scannerRef.current.getState(); } catch (e) { state = Html5QrcodeScannerState.UNKNOWN; }
+        
         if (state === Html5QrcodeScannerState.SCANNING || state === Html5QrcodeScannerState.PAUSED) {
             await scannerRef.current.stop();
         }
+        
         // Only clear if the element still exists in DOM
         if (document.getElementById(elementId)) {
-            scannerRef.current.clear();
+            try {
+                scannerRef.current.clear();
+            } catch (e) {
+                // Ignore clear errors
+            }
         }
       } catch (error) {
         console.warn("Failed to stop/clear scanner safely:", error);
+      } finally {
+        scannerRef.current = null;
+        processingRef.current = false;
       }
-      scannerRef.current = null;
     };
 
     const startScanner = async () => {
-      // If not active, ensure we are stopped
+      // If active is false, we should be cleaned up.
       if (!isActive) {
         await cleanupScanner();
         return;
       }
+
+      // If processing (starting or stopping), wait.
+      if (processingRef.current) return;
 
       // Wait for DOM element to be ready
       if (!document.getElementById(elementId)) {
@@ -68,14 +94,14 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, bat
         return;
       }
 
-      // If already has an instance, clean it up first to be safe
+      // If already has an instance, clean it up first
       if (scannerRef.current) {
-          // If already scanning, just return (idempotent)
-          if (scannerRef.current.isScanning) return;
+          if (scannerRef.current.isScanning) return; // Already running
           await cleanupScanner();
       }
 
       try {
+        processingRef.current = true;
         const html5QrCode = new Html5Qrcode(elementId, { 
           formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE], 
           verbose: false 
@@ -83,11 +109,11 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, bat
         scannerRef.current = html5QrCode;
 
         await html5QrCode.start(
-          { facingMode: "environment" },
+          { facingMode: facingMode },
           {
             fps: 10,
             qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0,
+            aspectRatio: window.innerWidth / window.innerHeight, // Match screen aspect ratio to reduce rotation issues
           },
           (decodedText) => {
              if (!isMounted) return;
@@ -104,6 +130,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, bat
                  }
              } else {
                  // Normal Mode: Pause and callback
+                 // Check if still scanning before pausing to prevent throw
                  if (scannerRef.current?.getState() === Html5QrcodeScannerState.SCANNING) {
                      scannerRef.current.pause(true);
                  }
@@ -125,19 +152,21 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, bat
           setHasPermission(false);
           setHasError(true);
         }
+      } finally {
+          processingRef.current = false;
       }
     };
 
     // Small delay to allow render to finish placing the div
-    const timer = setTimeout(startScanner, 50);
+    const timer = setTimeout(startScanner, 100);
 
     return () => {
       isMounted = false;
       clearTimeout(timer);
-      // Trigger cleanup but don't await it (useEffect cleanup is sync)
+      // Trigger cleanup safely
       cleanupScanner().catch(e => console.error("Cleanup failed", e));
     };
-  }, [isActive]); // Only restart if isActive toggles
+  }, [isActive, facingMode]); // Restart if facingMode changes
 
   const handleFileScan = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -152,6 +181,10 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, bat
                 alert(t.noQrInImage);
             });
     }
+  };
+
+  const toggleCamera = () => {
+      setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
   };
 
   // If inactive, we render a hidden div to ensure 'cleanupScanner' can find the element 
@@ -171,7 +204,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, bat
       <div id="reader-file" style={{ display: 'none' }}></div>
 
       {/* Main Scanner Viewport */}
-      <div id="reader" className="w-full h-full object-cover"></div>
+      <div id="reader" className={`w-full h-full ${facingMode === 'user' ? 'mirror-mode' : ''}`}></div>
 
       {/* Overlay UI */}
       <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
@@ -220,6 +253,19 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, bat
                 {batchMode ? t.batchModeOn : t.batchModeOff}
             </span>
          </div>
+
+         {/* Switch Camera Button */}
+         <div className="flex flex-col items-center gap-2 -mb-2">
+            <button 
+                onClick={toggleCamera}
+                className="p-4 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-all active:scale-95"
+            >
+                <RotateCcw className="w-8 h-8" />
+            </button>
+             <span className="text-xs font-medium text-white/80 bg-black/40 px-2 py-1 rounded-md backdrop-blur-sm">
+                {t.flip}
+            </span>
+         </div>
          
          {/* Gallery Button */}
          <div className="flex flex-col items-center gap-2">
@@ -243,6 +289,16 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, bat
       </div>
       
       <style>{`
+        #reader video {
+            object-fit: cover !important;
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 0 !important;
+        }
+        /* Mirror Mode: Flip horizontal (scaleX -1) for Selfie Camera */
+        #reader.mirror-mode video {
+            transform: scaleX(-1) !important;
+        }
         @keyframes scan {
           0% { top: 0%; opacity: 0; }
           10% { opacity: 1; }

@@ -1,3 +1,5 @@
+
+
 export type Language = 'en' | 'tr';
 
 export const translations = {
@@ -17,7 +19,8 @@ export const translations = {
         gallery: 'Gallery',
         scanFromImage: 'Scan Image',
         noQrInImage: 'No QR code found in selected image.',
-        batchScanSaved: 'Saved to history'
+        batchScanSaved: 'Saved to history',
+        flip: 'Flip Camera'
     },
     generate: {
         title: 'Create QR Code',
@@ -27,7 +30,27 @@ export const translations = {
         share: 'Share',
         save: 'Save',
         clear: 'Clear',
-        color: 'Color'
+        color: 'Color',
+        modeText: 'Text / URL',
+        modeVoice: 'Voice',
+        modeVCard: 'Contact',
+        voice: {
+            tapToRecord: 'Tap to Record',
+            recording: 'Recording...',
+            tapToStop: 'Tap to Stop',
+            playPreview: 'Preview',
+            upload: 'Create Voice QR',
+            uploading: 'Uploading...',
+            success: 'Voice QR Created!',
+            error: 'Upload failed. Try again.'
+        },
+        vcard: {
+            fullName: 'Full Name',
+            phone: 'Phone Number',
+            email: 'Email',
+            org: 'Company / Org',
+            title: 'Digital Business Card'
+        }
     },
     result: {
         title: 'Scanned Content',
@@ -44,6 +67,14 @@ export const translations = {
             type: 'Security',
             copyPass: 'Copy Password',
             connect: 'Connect (Android only)'
+        },
+        audio: {
+            title: 'Voice Message',
+            play: 'Play Audio'
+        },
+        vcard: {
+            title: 'Contact Card',
+            addToContacts: 'Add to Contacts'
         }
     },
     history: {
@@ -80,7 +111,8 @@ export const translations = {
         gallery: 'Galeri',
         scanFromImage: 'Resimden Tara',
         noQrInImage: 'Seçilen resimde QR kod bulunamadı.',
-        batchScanSaved: 'Geçmişe kaydedildi'
+        batchScanSaved: 'Geçmişe kaydedildi',
+        flip: 'Kamerayı Çevir'
     },
     generate: {
         title: 'QR Kod Oluştur',
@@ -90,7 +122,27 @@ export const translations = {
         share: 'Paylaş',
         save: 'Kaydet',
         clear: 'Temizle',
-        color: 'Renk'
+        color: 'Renk',
+        modeText: 'Metin / URL',
+        modeVoice: 'Ses',
+        modeVCard: 'Kartvizit',
+        voice: {
+            tapToRecord: 'Kaydet',
+            recording: 'Kaydediliyor...',
+            tapToStop: 'Durdur',
+            playPreview: 'Önizleme',
+            upload: 'Sesli QR Oluştur',
+            uploading: 'Yükleniyor...',
+            success: 'Sesli QR Oluşturuldu!',
+            error: 'Yükleme başarısız. Tekrar deneyin.'
+        },
+        vcard: {
+            fullName: 'Ad Soyad',
+            phone: 'Telefon Numarası',
+            email: 'E-posta',
+            org: 'Şirket / Kurum',
+            title: 'Dijital Kartvizit'
+        }
     },
     result: {
         title: 'Taranan İçerik',
@@ -107,6 +159,14 @@ export const translations = {
             type: 'Güvenlik',
             copyPass: 'Şifreyi Kopyala',
             connect: 'Bağlan (Sadece Android)'
+        },
+        audio: {
+            title: 'Sesli Mesaj',
+            play: 'Sesi Oynat'
+        },
+        vcard: {
+            title: 'Kişi Kartı',
+            addToContacts: 'Rehbere Ekle'
         }
     },
     history: {

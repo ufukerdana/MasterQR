@@ -2,6 +2,7 @@
   "name": "MasterQR",
   "description": "A modern, cross-platform QR code scanner and generator featuring Material 3 design aesthetics.",
   "requestFramePermissions": [
-    "camera"
+    "camera",
+    "microphone"
   ]
 }

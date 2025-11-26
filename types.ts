@@ -1,14 +1,20 @@
+
 export type Tab = 'scan' | 'generate' | 'history';
 
 export type Language = 'en' | 'tr';
 
-export type ScanType = 'text' | 'url' | 'wifi' | 'unknown';
+export type ScanType = 'text' | 'url' | 'wifi' | 'audio' | 'vcard' | 'unknown';
+
+export interface QrMeta {
+  color?: string;
+}
 
 export interface HistoryItem {
   id: string;
   text: string;
   type: ScanType;
   timestamp: number;
+  meta?: QrMeta;
 }
 
 export interface ScanResult {

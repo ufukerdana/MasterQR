@@ -1,17 +1,21 @@
+
 import React, { useState, useEffect } from 'react';
 import { Scan, QrCode, Moon, Sun, Globe, History as HistoryIcon } from 'lucide-react';
 import Scanner from './components/Scanner';
 import Generator from './components/Generator';
 import ResultModal from './components/ResultModal';
 import History from './components/History';
-import { Tab, Language, HistoryItem, ScanType } from './types';
+import { Tab, Language, HistoryItem, ScanType, QrMeta } from './types';
 import { translations } from './translations';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('scan');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [lang, setLang] = useState<Language>('en');
-  const [scanResult, setScanResult] = useState<string | null>(null);
+  
+  // Changed: We now track the full HistoryItem to pass metadata (color) to the modal
+  const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null);
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -51,19 +55,36 @@ function App() {
     }
   }, []);
 
-  const saveToHistory = (text: string) => {
+  const saveToHistory = (text: string, source: 'scan' | 'generate' = 'scan', meta?: QrMeta) => {
     let type: ScanType = 'text';
     if (text.startsWith('WIFI:')) type = 'wifi';
+    else if (/^BEGIN:VCARD/i.test(text)) type = 'vcard';
     else if (text.startsWith('http')) type = 'url';
+    else if (text.toLowerCase().includes('firebasestorage') || text.toLowerCase().endsWith('.mp3')) type = 'audio';
 
+    // Prevent duplicates at the top of history (simple check)
+    // We update the timestamp if it exists
+    const existingIndex = history.findIndex(h => h.text === text);
+    
+    // Create new item
     const newItem: HistoryItem = {
         id: Date.now().toString(),
         text,
         type,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        meta: meta || { color: '#000000' }
     };
 
-    const newHistory = [newItem, ...history];
+    let newHistory;
+    if (existingIndex > -1 && source === 'scan') {
+        // Move to top if scanned again
+        const temp = [...history];
+        temp.splice(existingIndex, 1);
+        newHistory = [newItem, ...temp];
+    } else {
+        newHistory = [newItem, ...history];
+    }
+
     setHistory(newHistory);
     localStorage.setItem('qr_history', JSON.stringify(newHistory));
     return newItem;
@@ -95,17 +116,15 @@ function App() {
   const t = translations[lang];
 
   const handleScan = (decodedText: string) => {
-    saveToHistory(decodedText);
-    setScanResult(decodedText);
+    const item = saveToHistory(decodedText, 'scan');
+    setSelectedItem(item);
     setIsModalOpen(true);
   };
 
   const handleBatchScan = (decodedText: string) => {
-    saveToHistory(decodedText);
-    // Simple toast feedback for batch scan
+    saveToHistory(decodedText, 'scan');
     if (navigator.vibrate) navigator.vibrate(200);
     
-    // Show temporary toast (implementation embedded here for simplicity)
     const toast = document.createElement('div');
     toast.className = 'fixed top-24 left-1/2 -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-full text-sm font-medium z-50 animate-in fade-in slide-in-from-top-4';
     toast.textContent = t.scan.batchScanSaved;
@@ -197,6 +216,7 @@ function App() {
         {activeTab === 'generate' && (
             <Generator 
                 onShare={handleShare}
+                onGenerate={(text, color) => saveToHistory(text, 'generate', { color })}
                 t={t.generate} 
             />
         )}
@@ -205,8 +225,8 @@ function App() {
             <History 
                 history={history}
                 onClear={clearHistory}
-                onItemClick={(text) => {
-                    setScanResult(text);
+                onItemClick={(item) => {
+                    setSelectedItem(item);
                     setIsModalOpen(true);
                 }}
                 t={t.history}
@@ -260,7 +280,7 @@ function App() {
       {/* Result Modal */}
       <ResultModal 
         isOpen={isModalOpen}
-        result={scanResult}
+        historyItem={selectedItem}
         onClose={() => setIsModalOpen(false)}
         onShare={handleShare}
         t={t.result}
