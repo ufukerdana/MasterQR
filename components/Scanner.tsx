@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
-import { Camera, AlertCircle, Image as ImageIcon, Layers, Zap } from 'lucide-react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats, Html5QrcodeScannerState } from 'html5-qrcode';
+import { AlertCircle, Image as ImageIcon, Layers, Zap } from 'lucide-react';
 import { translations } from '../translations';
 
 interface ScannerProps {
@@ -15,26 +15,69 @@ interface ScannerProps {
 const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, batchMode, setBatchMode }) => {
   const [hasError, setHasError] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [lastScanned, setLastScanned] = useState<string | null>(null);
+  
+  // Refs for stable access in async callbacks without re-triggering effects
+  const onScanRef = useRef(onScan);
+  const onBatchScanRef = useRef(onBatchScan);
+  const batchModeRef = useRef(batchMode);
+  const lastScannedRef = useRef<string | null>(null);
+  
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const mountedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Update refs when props change
   useEffect(() => {
-    mountedRef.current = true;
-    
-    const startScanner = async () => {
-      if (!isActive) return;
+    onScanRef.current = onScan;
+    onBatchScanRef.current = onBatchScan;
+    batchModeRef.current = batchMode;
+  }, [onScan, onBatchScan, batchMode]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const elementId = "reader";
+
+    const cleanupScanner = async () => {
+      if (!scannerRef.current) return;
 
       try {
-        // Request permission
-        await navigator.mediaDevices.getUserMedia({ video: true });
-        setHasPermission(true);
-        setHasError(false);
+        // Check state before stopping
+        const state = scannerRef.current.getState();
+        if (state === Html5QrcodeScannerState.SCANNING || state === Html5QrcodeScannerState.PAUSED) {
+            await scannerRef.current.stop();
+        }
+        // Only clear if the element still exists in DOM
+        if (document.getElementById(elementId)) {
+            scannerRef.current.clear();
+        }
+      } catch (error) {
+        console.warn("Failed to stop/clear scanner safely:", error);
+      }
+      scannerRef.current = null;
+    };
 
-        const formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
-        const html5QrCode = new Html5Qrcode("reader", { 
-          formatsToSupport, 
+    const startScanner = async () => {
+      // If not active, ensure we are stopped
+      if (!isActive) {
+        await cleanupScanner();
+        return;
+      }
+
+      // Wait for DOM element to be ready
+      if (!document.getElementById(elementId)) {
+        if (isMounted) setTimeout(startScanner, 100);
+        return;
+      }
+
+      // If already has an instance, clean it up first to be safe
+      if (scannerRef.current) {
+          // If already scanning, just return (idempotent)
+          if (scannerRef.current.isScanning) return;
+          await cleanupScanner();
+      }
+
+      try {
+        const html5QrCode = new Html5Qrcode(elementId, { 
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE], 
           verbose: false 
         });
         scannerRef.current = html5QrCode;
@@ -47,70 +90,63 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, bat
             aspectRatio: 1.0,
           },
           (decodedText) => {
-             if (mountedRef.current) {
-               if (batchMode) {
-                 // Batch Mode: Prevent immediate duplicate scans of the exact same code
-                 if (lastScanned !== decodedText) {
-                    setLastScanned(decodedText);
-                    onBatchScan(decodedText);
+             if (!isMounted) return;
+
+             if (batchModeRef.current) {
+                 // Batch Mode: Prevent immediate duplicate scans
+                 if (lastScannedRef.current !== decodedText) {
+                    lastScannedRef.current = decodedText;
+                    onBatchScanRef.current(decodedText);
                     // Reset duplicate check after 2 seconds
-                    setTimeout(() => setLastScanned(null), 2000);
+                    setTimeout(() => { 
+                        if (isMounted) lastScannedRef.current = null; 
+                    }, 2000);
                  }
-               } else {
-                 // Normal Mode: Stop and show result
-                 html5QrCode.pause(true); 
-                 onScan(decodedText);
-               }
+             } else {
+                 // Normal Mode: Pause and callback
+                 if (scannerRef.current?.getState() === Html5QrcodeScannerState.SCANNING) {
+                     scannerRef.current.pause(true);
+                 }
+                 onScanRef.current(decodedText);
              }
           },
           (errorMessage) => {
             // parse error, ignore
           }
         );
+
+        if (isMounted) {
+            setHasPermission(true);
+            setHasError(false);
+        }
       } catch (err) {
         console.error("Error starting scanner", err);
-        if (mountedRef.current) {
+        if (isMounted) {
           setHasPermission(false);
           setHasError(true);
         }
       }
     };
 
-    const stopScanner = async () => {
-      if (scannerRef.current) {
-        try {
-          if (scannerRef.current.isScanning) {
-            await scannerRef.current.stop();
-          }
-          scannerRef.current.clear();
-        } catch (e) {
-          console.error("Failed to stop scanner", e);
-        }
-        scannerRef.current = null;
-      }
-    };
+    // Small delay to allow render to finish placing the div
+    const timer = setTimeout(startScanner, 50);
 
-    if (isActive) {
-      const timer = setTimeout(() => {
-        startScanner();
-      }, 100);
-      return () => {
-        clearTimeout(timer);
-        stopScanner();
-        mountedRef.current = false;
-      };
-    } else {
-      stopScanner();
-    }
-  }, [isActive, onScan, onBatchScan, batchMode, lastScanned]);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+      // Trigger cleanup but don't await it (useEffect cleanup is sync)
+      cleanupScanner().catch(e => console.error("Cleanup failed", e));
+    };
+  }, [isActive]); // Only restart if isActive toggles
 
   const handleFileScan = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
         const file = e.target.files[0];
+        // Create a temporary instance just for the file
         const html5QrCode = new Html5Qrcode("reader-file", { verbose: false });
         html5QrCode.scanFile(file, true)
             .then(decodedText => {
-                onScan(decodedText);
+                onScanRef.current(decodedText);
             })
             .catch(err => {
                 alert(t.noQrInImage);
@@ -118,13 +154,20 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, bat
     }
   };
 
-  if (!isActive) return null;
+  // If inactive, we render a hidden div to ensure 'cleanupScanner' can find the element 
+  // to clear it properly without throwing "Element not found".
+  if (!isActive) {
+      return (
+        <div className="hidden">
+            <div id="reader"></div>
+            <div id="reader-file"></div>
+        </div>
+      );
+  }
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center relative bg-black">
-      {/* Hidden file reader div required by html5-qrcode for file scanning if main reader not active, 
-          but here we use a separate instance or the main one if possible. 
-          Actually scanFile can run independently. */}
+      {/* Hidden file reader div required by html5-qrcode for file scanning */}
       <div id="reader-file" style={{ display: 'none' }}></div>
 
       {/* Main Scanner Viewport */}
