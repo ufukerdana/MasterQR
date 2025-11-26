@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { Share2, Download, Copy, RefreshCw, Wand2 } from 'lucide-react';
+import { Share2, Download, RefreshCw, Wand2 } from 'lucide-react';
 import { translations } from '../translations';
 
 interface GeneratorProps {
@@ -8,9 +8,21 @@ interface GeneratorProps {
   t: typeof translations['en']['generate'];
 }
 
+const COLORS = [
+  '#000000', // Black
+  '#4f46e5', // Indigo (Primary)
+  '#2563eb', // Blue
+  '#dc2626', // Red
+  '#16a34a', // Green
+  '#9333ea', // Purple
+  '#ea580c', // Orange
+  '#db2777', // Pink
+];
+
 const Generator: React.FC<GeneratorProps> = ({ onShare, t }) => {
   const [text, setText] = useState('');
   const [generatedText, setGeneratedText] = useState('');
+  const [fgColor, setFgColor] = useState('#000000');
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const handleGenerate = () => {
@@ -80,6 +92,23 @@ const Generator: React.FC<GeneratorProps> = ({ onShare, t }) => {
           )}
         </div>
 
+        {/* Color Picker */}
+        <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 block">{t.color}</label>
+            <div className="flex flex-wrap gap-3">
+                {COLORS.map((color) => (
+                    <button
+                        key={color}
+                        onClick={() => setFgColor(color)}
+                        className={`w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 ${
+                            fgColor === color ? 'border-slate-400 scale-110 ring-2 ring-primary-500 ring-offset-2 dark:ring-offset-slate-800' : 'border-transparent'
+                        }`}
+                        style={{ backgroundColor: color }}
+                    />
+                ))}
+            </div>
+        </div>
+
         <button
           onClick={handleGenerate}
           disabled={!text}
@@ -99,7 +128,7 @@ const Generator: React.FC<GeneratorProps> = ({ onShare, t }) => {
                 size={220}
                 level="H"
                 bgColor="#ffffff"
-                fgColor="#000000"
+                fgColor={fgColor}
               />
             </div>
             
