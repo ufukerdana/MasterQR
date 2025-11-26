@@ -1,9 +1,10 @@
 
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { Copy, Share2, ExternalLink, X, Check, ShieldCheck, ShieldAlert, Wifi, Key, Lock, Mic, Contact, Phone, Mail, Building, UserPlus, QrCode } from 'lucide-react';
+import { Copy, Share2, ExternalLink, X, Check, ShieldCheck, ShieldAlert, Wifi, Key, Lock, Mic, Contact, Phone, Mail, Building, UserPlus, QrCode, Unlock } from 'lucide-react';
 import { translations } from '../translations';
 import { HistoryItem } from '../types';
+import { decryptData, isEncrypted } from '../utils/crypto';
 
 interface ResultModalProps {
   historyItem: HistoryItem | null;
@@ -14,13 +15,49 @@ interface ResultModalProps {
 }
 
 const ResultModal: React.FC<ResultModalProps> = ({ historyItem, isOpen, onClose, onShare, t }) => {
-  const [copied, setCopied] = React.useState(false);
-  const [passCopied, setPassCopied] = React.useState(false);
+  const [copied, setCopied] = useState(false);
+  const [passCopied, setPassCopied] = useState(false);
+  
+  // Crypto State
+  const [isLocked, setIsLocked] = useState(false);
+  const [password, setPassword] = useState('');
+  const [decryptedText, setDecryptedText] = useState<string | null>(null);
+  const [unlockError, setUnlockError] = useState(false);
+
   const qrRef = useRef<HTMLDivElement>(null);
+
+  // Reset state when opening new item
+  useEffect(() => {
+    if (isOpen && historyItem) {
+        if (isEncrypted(historyItem.text)) {
+            setIsLocked(true);
+            setDecryptedText(null);
+            setPassword('');
+            setUnlockError(false);
+        } else {
+            setIsLocked(false);
+            setDecryptedText(null);
+        }
+    }
+  }, [isOpen, historyItem]);
+
+  const handleUnlock = () => {
+    if (!historyItem) return;
+    const result = decryptData(historyItem.text, password);
+    if (result) {
+        setDecryptedText(result);
+        setIsLocked(false);
+        setUnlockError(false);
+    } else {
+        setUnlockError(true);
+    }
+  };
 
   if (!isOpen || !historyItem) return null;
 
-  const result = historyItem.text;
+  // If decrypted text exists, use that. Otherwise use the raw text.
+  // Note: If locked, we don't show raw text in UI content area, but we do keep it for reference.
+  const displayContent = decryptedText || historyItem.text;
   const qrColor = historyItem.meta?.color || '#000000';
 
   const isUrl = (text: string) => {
@@ -35,7 +72,6 @@ const ResultModal: React.FC<ResultModalProps> = ({ historyItem, isOpen, onClose,
 
   const isSecure = (text: string) => text ? text.startsWith('https://') : false;
   const isWifi = (text: string) => text ? text.startsWith('WIFI:') : false;
-  // Case insensitive check for vCard start
   const isVCard = (text: string) => text ? /^BEGIN:VCARD/i.test(text) : false;
 
   const isAudio = (text: string) => {
@@ -52,10 +88,7 @@ const ResultModal: React.FC<ResultModalProps> = ({ historyItem, isOpen, onClose,
   };
 
   const parseVCard = (text: string) => {
-      // Robust regex to handle parameters like "TEL;TYPE=WORK:123", case insensitivity, and different newlines
-      // Matches: (Start or Newline) KEY (Optional Params) : (Value) (Newline or End)
       const getVal = (key: string) => {
-          // Allow for \n or \r\n
           const regex = new RegExp(`(?:^|\\r?\\n)${key}(?:;[^:]*?)?:([^\\n\\r]+)`, 'i');
           const match = text.match(regex);
           return match ? match[1].trim() : '';
@@ -66,7 +99,6 @@ const ResultModal: React.FC<ResultModalProps> = ({ historyItem, isOpen, onClose,
       const email = getVal('EMAIL');
       const org = getVal('ORG');
       
-      // Fallback for Name if FN is missing but N exists (N:Family;Given;...)
       let displayName = fn;
       if (!displayName) {
           const nParts = getVal('N').split(';');
@@ -96,7 +128,7 @@ const ResultModal: React.FC<ResultModalProps> = ({ historyItem, isOpen, onClose,
   };
 
   const handleOpenUrl = () => {
-    let url = result;
+    let url = displayContent;
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       url = 'https://' + url;
     }
@@ -104,7 +136,7 @@ const ResultModal: React.FC<ResultModalProps> = ({ historyItem, isOpen, onClose,
   };
 
   const handleAddToContacts = () => {
-    const blob = new Blob([result], { type: "text/vcard;charset=utf-8" });
+    const blob = new Blob([displayContent], { type: "text/vcard;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -126,14 +158,56 @@ const ResultModal: React.FC<ResultModalProps> = ({ historyItem, isOpen, onClose,
 
   const handleSmartShare = async () => {
       const blob = await getQrBlob();
-      onShare(blob, result);
+      onShare(blob, displayContent);
   };
 
   const renderContent = () => {
-    if (isVCard(result)) {
-        const { fn, tel, email, org } = parseVCard(result);
+    if (isLocked) {
         return (
-            <div className="space-y-4">
+            <div className="space-y-4 text-center py-4">
+                <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-2 animate-bounce">
+                    <Lock className="w-8 h-8 text-amber-600 dark:text-amber-500" />
+                </div>
+                <h4 className="font-bold text-xl text-slate-800 dark:text-white">{t.crypto.title}</h4>
+                <p className="text-slate-500 dark:text-slate-400 text-sm px-4">
+                    {t.crypto.lockedDesc}
+                </p>
+
+                <div className="px-4 pt-2">
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder={t.crypto.enterPass}
+                        className={`w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-2 outline-none transition-all text-center text-lg ${
+                            unlockError 
+                            ? 'border-red-500 text-red-600 focus:border-red-500' 
+                            : 'border-slate-200 dark:border-slate-700 focus:border-amber-500'
+                        }`}
+                        onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
+                    />
+                    {unlockError && (
+                        <p className="text-red-500 text-xs mt-2 font-medium">{t.crypto.wrongPass}</p>
+                    )}
+                </div>
+
+                <div className="px-4">
+                     <button
+                        onClick={handleUnlock}
+                        className="w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white py-3.5 rounded-xl font-semibold transition-colors shadow-lg shadow-amber-500/20"
+                    >
+                        <Unlock className="w-5 h-5" />
+                        {t.crypto.unlock}
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (isVCard(displayContent)) {
+        const { fn, tel, email, org } = parseVCard(displayContent);
+        return (
+            <div className="space-y-4 animate-in fade-in zoom-in duration-300">
                  <div className="flex items-center gap-3 mb-2">
                     <div className="bg-indigo-100 dark:bg-indigo-900/30 p-2 rounded-lg">
                         <Contact className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
@@ -175,10 +249,10 @@ const ResultModal: React.FC<ResultModalProps> = ({ historyItem, isOpen, onClose,
         );
     }
 
-    if (isWifi(result)) {
-        const { ssid, password, type } = parseWifi(result);
+    if (isWifi(displayContent)) {
+        const { ssid, password, type } = parseWifi(displayContent);
         return (
-            <div className="space-y-4">
+            <div className="space-y-4 animate-in fade-in zoom-in duration-300">
                 <div className="flex items-center gap-3 mb-2">
                     <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg">
                         <Wifi className="w-6 h-6 text-blue-600 dark:text-blue-400" />
@@ -219,9 +293,9 @@ const ResultModal: React.FC<ResultModalProps> = ({ historyItem, isOpen, onClose,
         );
     }
 
-    if (isAudio(result)) {
+    if (isAudio(displayContent)) {
         return (
-            <div className="space-y-4">
+            <div className="space-y-4 animate-in fade-in zoom-in duration-300">
                 <div className="flex items-center gap-3 mb-2">
                     <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-lg">
                         <Mic className="w-6 h-6 text-purple-600 dark:text-purple-400" />
@@ -229,33 +303,41 @@ const ResultModal: React.FC<ResultModalProps> = ({ historyItem, isOpen, onClose,
                     <h4 className="font-bold text-lg text-slate-800 dark:text-white">{t.audio.title}</h4>
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 text-center">
-                    <audio controls src={result} className="w-full" autoPlay />
+                    <audio controls src={displayContent} className="w-full" autoPlay />
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 border border-slate-100 dark:border-slate-700">
-                     <p className="text-xs text-slate-400 break-all">{result}</p>
+                     <p className="text-xs text-slate-400 break-all">{displayContent}</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <>
-            {isUrl(result) && (
+        <div className="animate-in fade-in zoom-in duration-300">
+            {isUrl(displayContent) && (
                 <div className={`mb-4 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
-                    isSecure(result) 
+                    isSecure(displayContent) 
                     ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
                     : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
                 }`}>
-                    {isSecure(result) ? <ShieldCheck className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4" />}
-                    {isSecure(result) ? t.secure : t.unverified}
+                    {isSecure(displayContent) ? <ShieldCheck className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4" />}
+                    {isSecure(displayContent) ? t.secure : t.unverified}
                 </div>
             )}
+            
+            {decryptedText && (
+                <div className="mb-4 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+                    <Check className="w-4 h-4" />
+                    {t.crypto.success}
+                </div>
+            )}
+
             <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 mb-6 border border-slate-100 dark:border-slate-700">
                 <p className="text-slate-800 dark:text-slate-200 break-words font-mono text-sm leading-relaxed max-h-48 overflow-y-auto custom-scrollbar">
-                    {result}
+                    {displayContent}
                 </p>
             </div>
-        </>
+        </div>
     );
   };
 
@@ -286,18 +368,23 @@ const ResultModal: React.FC<ResultModalProps> = ({ historyItem, isOpen, onClose,
             <div className="flex justify-center mb-6">
                  <div ref={qrRef} className="p-3 bg-white rounded-xl shadow-md border border-slate-100 dark:border-slate-800 inline-block">
                     <QRCodeCanvas
-                        value={result}
+                        value={historyItem.text} // Always show original (encrypted) QR
                         size={120}
                         level="M"
                         bgColor="#ffffff"
                         fgColor={qrColor}
-                        imageSettings={isAudio(result) ? {
+                        imageSettings={isAudio(displayContent) ? {
                             src: "https://upload.wikimedia.org/wikipedia/commons/2/21/Speaker_Icon.svg",
                             height: 24,
                             width: 24,
                             excavate: true
-                        } : isVCard(result) ? {
+                        } : isVCard(displayContent) ? {
                             src: "https://upload.wikimedia.org/wikipedia/commons/9/93/Google_Contacts_icon.svg",
+                            height: 24,
+                            width: 24,
+                            excavate: true
+                        } : isLocked ? {
+                            src: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Lock_font_awesome.svg/512px-Lock_font_awesome.svg.png",
                             height: 24,
                             width: 24,
                             excavate: true
@@ -308,49 +395,51 @@ const ResultModal: React.FC<ResultModalProps> = ({ historyItem, isOpen, onClose,
 
             {renderContent()}
 
-            <div className="space-y-3 mt-4">
-                {isVCard(result) && (
-                    <button
-                        onClick={handleAddToContacts}
-                        className="w-full flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-3.5 rounded-xl font-semibold transition-colors shadow-lg shadow-primary-500/20"
-                    >
-                        <UserPlus className="w-5 h-5" />
-                        {t.vcard.addToContacts}
-                    </button>
-                )}
+            {!isLocked && (
+                <div className="space-y-3 mt-4">
+                    {isVCard(displayContent) && (
+                        <button
+                            onClick={handleAddToContacts}
+                            className="w-full flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-3.5 rounded-xl font-semibold transition-colors shadow-lg shadow-primary-500/20"
+                        >
+                            <UserPlus className="w-5 h-5" />
+                            {t.vcard.addToContacts}
+                        </button>
+                    )}
 
-                {isUrl(result) && !isWifi(result) && !isAudio(result) && (
-                    <button
-                        onClick={handleOpenUrl}
-                        className="w-full flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-3.5 rounded-xl font-semibold transition-colors shadow-lg shadow-primary-500/20"
-                    >
-                        <ExternalLink className="w-5 h-5" />
-                        {t.openBrowser}
-                    </button>
-                )}
+                    {isUrl(displayContent) && !isWifi(displayContent) && !isAudio(displayContent) && (
+                        <button
+                            onClick={handleOpenUrl}
+                            className="w-full flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-3.5 rounded-xl font-semibold transition-colors shadow-lg shadow-primary-500/20"
+                        >
+                            <ExternalLink className="w-5 h-5" />
+                            {t.openBrowser}
+                        </button>
+                    )}
 
-                <div className="grid grid-cols-2 gap-3">
-                    <button
-                        onClick={() => handleCopy(result)}
-                        className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-medium transition-all duration-200 border-2 ${
-                            copied 
-                            ? 'bg-green-50 dark:bg-green-900/20 border-green-500 text-green-600 dark:text-green-400' 
-                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
-                        }`}
-                    >
-                        {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-                        {copied ? t.copied : t.copy}
-                    </button>
+                    <div className="grid grid-cols-2 gap-3">
+                        <button
+                            onClick={() => handleCopy(displayContent)}
+                            className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-medium transition-all duration-200 border-2 ${
+                                copied 
+                                ? 'bg-green-50 dark:bg-green-900/20 border-green-500 text-green-600 dark:text-green-400' 
+                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
+                            }`}
+                        >
+                            {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                            {copied ? t.copied : t.copy}
+                        </button>
 
-                    <button
-                        onClick={handleSmartShare}
-                        className="flex items-center justify-center gap-2 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 py-3.5 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                    >
-                        <Share2 className="w-5 h-5" />
-                        {t.share}
-                    </button>
+                        <button
+                            onClick={handleSmartShare}
+                            className="flex items-center justify-center gap-2 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 py-3.5 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                        >
+                            <Share2 className="w-5 h-5" />
+                            {t.share}
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
       </div>
     </div>

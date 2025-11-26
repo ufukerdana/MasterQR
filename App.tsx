@@ -7,6 +7,7 @@ import ResultModal from './components/ResultModal';
 import History from './components/History';
 import { Tab, Language, HistoryItem, ScanType, QrMeta } from './types';
 import { translations } from './translations';
+import { isEncrypted } from './utils/crypto';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('scan');
@@ -57,7 +58,8 @@ function App() {
 
   const saveToHistory = (text: string, source: 'scan' | 'generate' = 'scan', meta?: QrMeta) => {
     let type: ScanType = 'text';
-    if (text.startsWith('WIFI:')) type = 'wifi';
+    if (isEncrypted(text)) type = 'crypto';
+    else if (text.startsWith('WIFI:')) type = 'wifi';
     else if (/^BEGIN:VCARD/i.test(text)) type = 'vcard';
     else if (text.startsWith('http')) type = 'url';
     else if (text.toLowerCase().includes('firebasestorage') || text.toLowerCase().endsWith('.mp3')) type = 'audio';
@@ -72,7 +74,8 @@ function App() {
         text,
         type,
         timestamp: Date.now(),
-        meta: meta || { color: '#000000' }
+        meta: meta || { color: '#000000' },
+        source
     };
 
     let newHistory;

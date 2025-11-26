@@ -1,9 +1,10 @@
 
 import React, { useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { Share2, Download, RefreshCw, Wand2, Type, Mic, Contact } from 'lucide-react';
+import { Share2, Download, RefreshCw, Wand2, Type, Mic, Contact, Wifi, Lock, Shield } from 'lucide-react';
 import { translations } from '../translations';
 import VoiceRecorder from './VoiceRecorder';
+import { encryptData } from '../utils/crypto';
 
 interface GeneratorProps {
   onShare: (blob: Blob | null, text: string) => void;
@@ -13,7 +14,6 @@ interface GeneratorProps {
 
 const COLORS = [
   '#000000', // Black
-  // Indigo removed
   '#2563eb', // Blue
   '#dc2626', // Red
   '#16a34a', // Green
@@ -22,7 +22,8 @@ const COLORS = [
   '#db2777', // Pink
 ];
 
-type GenMode = 'text' | 'voice' | 'vcard';
+// Removed 'crypto' from specific modes, it's now a toggle
+type GenMode = 'text' | 'voice' | 'vcard' | 'wifi';
 
 const Generator: React.FC<GeneratorProps> = ({ onShare, onGenerate, t }) => {
   const [mode, setMode] = useState<GenMode>('text');
@@ -33,6 +34,13 @@ const Generator: React.FC<GeneratorProps> = ({ onShare, onGenerate, t }) => {
   // vCard Mode State
   const [vCard, setVCard] = useState({ name: '', phone: '', email: '', org: '' });
 
+  // WiFi Mode State
+  const [wifi, setWifi] = useState({ ssid: '', password: '', encryption: 'WPA' });
+
+  // Encryption Options (Available for all modes)
+  const [useEncryption, setUseEncryption] = useState(false);
+  const [password, setPassword] = useState('');
+
   const [generatedText, setGeneratedText] = useState('');
   const [fgColor, setFgColor] = useState('#000000');
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -40,7 +48,17 @@ const Generator: React.FC<GeneratorProps> = ({ onShare, onGenerate, t }) => {
   const resetAll = () => {
       setText('');
       setVCard({ name: '', phone: '', email: '', org: '' });
+      setWifi({ ssid: '', password: '', encryption: 'WPA' });
+      setUseEncryption(false);
+      setPassword('');
       setGeneratedText('');
+  };
+
+  const processEncryptionIfNeeded = (content: string): string => {
+      if (useEncryption && password.trim()) {
+          return encryptData(content, password);
+      }
+      return content;
   };
 
   const handleGenerate = () => {
@@ -52,22 +70,17 @@ const Generator: React.FC<GeneratorProps> = ({ onShare, onGenerate, t }) => {
     } else if (mode === 'vcard') {
         if (!vCard.name.trim()) return;
         
-        // Generate N (Structured Name) field: Family Name; Given Name; Middle Name; Prefix; Suffix
+        // Generate N (Structured Name) field
         const parts = vCard.name.trim().split(/\s+/);
         let nStr = '';
-        
         if (parts.length === 1) {
-            // Only first name
             nStr = `;${parts[0]};;;`;
         } else {
-            // Assume last part is family name
             const lastName = parts.pop();
             const firstName = parts.join(' ');
             nStr = `${lastName};${firstName};;;`;
         }
 
-        // Construct vCard string
-        // Note: Using \n is compact for QR codes.
         result = `BEGIN:VCARD
 VERSION:3.0
 N:${nStr}
@@ -76,17 +89,34 @@ TEL:${vCard.phone.trim()}
 EMAIL:${vCard.email.trim()}
 ORG:${vCard.org.trim()}
 END:VCARD`;
+    } else if (mode === 'wifi') {
+        if (!wifi.ssid.trim()) return;
+        
+        let encType = wifi.encryption;
+        let passPart = `P:${wifi.password};`;
+        
+        if (wifi.encryption === 'nopass') {
+            passPart = ''; // No password for open networks
+        }
+
+        const ssidEscaped = wifi.ssid; 
+        
+        result = `WIFI:T:${encType};S:${ssidEscaped};${passPart};`;
     }
 
     if (result) {
-        setGeneratedText(result);
-        onGenerate(result, fgColor);
+        // Apply encryption if enabled
+        const finalResult = processEncryptionIfNeeded(result);
+        setGeneratedText(finalResult);
+        onGenerate(finalResult, fgColor);
     }
   };
 
   const handleVoiceUploadComplete = (url: string) => {
-      setGeneratedText(url);
-      onGenerate(url, fgColor);
+      // Apply encryption if enabled
+      const finalResult = processEncryptionIfNeeded(url);
+      setGeneratedText(finalResult);
+      onGenerate(finalResult, fgColor);
   };
 
   const getCanvasBlob = async (): Promise<Blob | null> => {
@@ -117,10 +147,25 @@ END:VCARD`;
   };
 
   const isBtnDisabled = () => {
-      if (mode === 'text') return !text.trim();
-      if (mode === 'vcard') return !vCard.name.trim();
-      return true;
+      // Base content validation
+      let valid = false;
+      if (mode === 'text') valid = !!text.trim();
+      else if (mode === 'vcard') valid = !!vCard.name.trim();
+      else if (mode === 'wifi') valid = !!wifi.ssid.trim() && (wifi.encryption === 'nopass' || !!wifi.password.trim());
+      else if (mode === 'voice') return false; // Handled by voice component
+
+      // Encryption validation
+      if (useEncryption && !password.trim()) return true;
+
+      return !valid;
   };
+
+  // Helper for tab button styles
+  const tabClass = (active: boolean) => `flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-xs font-medium transition-all ${
+      active 
+      ? 'bg-white dark:bg-slate-700 shadow-sm text-primary-600 dark:text-primary-400' 
+      : 'text-slate-500 dark:text-slate-400 hover:bg-white/50 dark:hover:bg-slate-700/50'
+  }`;
 
   return (
     <div className="w-full max-w-md mx-auto p-6 flex flex-col h-full overflow-y-auto no-scrollbar pb-24">
@@ -133,39 +178,22 @@ END:VCARD`;
       </div>
 
       {/* Mode Switcher */}
-      <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl mb-6">
-         <button 
-            onClick={() => { setMode('text'); resetAll(); }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
-                mode === 'text' 
-                ? 'bg-white dark:bg-slate-700 shadow-sm text-primary-600 dark:text-primary-400' 
-                : 'text-slate-500 dark:text-slate-400'
-            }`}
-         >
+      <div className="flex p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl mb-6 gap-1 overflow-x-auto no-scrollbar">
+         <button onClick={() => { setMode('text'); resetAll(); }} className={tabClass(mode === 'text')}>
             <Type className="w-4 h-4" />
-            {t.modeText}
+            <span>Text</span>
          </button>
-         <button 
-            onClick={() => { setMode('voice'); resetAll(); }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
-                mode === 'voice' 
-                ? 'bg-white dark:bg-slate-700 shadow-sm text-primary-600 dark:text-primary-400' 
-                : 'text-slate-500 dark:text-slate-400'
-            }`}
-         >
-            <Mic className="w-4 h-4" />
-            {t.modeVoice}
+         <button onClick={() => { setMode('wifi'); resetAll(); }} className={tabClass(mode === 'wifi')}>
+            <Wifi className="w-4 h-4" />
+            <span>Wi-Fi</span>
          </button>
-         <button 
-            onClick={() => { setMode('vcard'); resetAll(); }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
-                mode === 'vcard' 
-                ? 'bg-white dark:bg-slate-700 shadow-sm text-primary-600 dark:text-primary-400' 
-                : 'text-slate-500 dark:text-slate-400'
-            }`}
-         >
+         <button onClick={() => { setMode('vcard'); resetAll(); }} className={tabClass(mode === 'vcard')}>
             <Contact className="w-4 h-4" />
-            {t.modeVCard}
+            <span>Card</span>
+         </button>
+         <button onClick={() => { setMode('voice'); resetAll(); }} className={tabClass(mode === 'voice')}>
+            <Mic className="w-4 h-4" />
+            <span>Voice</span>
          </button>
       </div>
 
@@ -234,6 +262,79 @@ END:VCARD`;
             </div>
         )}
 
+        {mode === 'wifi' && (
+             <div className="space-y-3 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                <h3 className="font-semibold text-slate-800 dark:text-white mb-2 flex items-center gap-2">
+                    <Wifi className="w-5 h-5 text-primary-500" />
+                    Wi-Fi Configuration
+                </h3>
+                
+                <input
+                    type="text"
+                    placeholder={t.wifi.ssid}
+                    value={wifi.ssid}
+                    onChange={(e) => setWifi({...wifi, ssid: e.target.value})}
+                    className="w-full px-4 py-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-primary-500 outline-none transition-all text-slate-900 dark:text-white"
+                />
+                
+                <div className="relative">
+                     <select 
+                        value={wifi.encryption}
+                        onChange={(e) => setWifi({...wifi, encryption: e.target.value})}
+                        className="w-full px-4 py-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-primary-500 outline-none transition-all text-slate-900 dark:text-white appearance-none"
+                    >
+                        <option value="WPA">{t.wifi.wpa}</option>
+                        <option value="WEP">{t.wifi.wep}</option>
+                        <option value="nopass">{t.wifi.none}</option>
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                </div>
+
+                {wifi.encryption !== 'nopass' && (
+                    <input
+                        type="text"
+                        placeholder={t.wifi.password}
+                        value={wifi.password}
+                        onChange={(e) => setWifi({...wifi, password: e.target.value})}
+                        className="w-full px-4 py-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-primary-500 outline-none transition-all text-slate-900 dark:text-white"
+                    />
+                )}
+            </div>
+        )}
+
+        {/* Global Encryption Toggle */}
+        <div className={`p-4 rounded-xl border transition-colors ${useEncryption ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${useEncryption ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>
+                        <Shield className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <span className="block font-medium text-slate-900 dark:text-white">{t.encryption.label}</span>
+                        {useEncryption && <span className="block text-xs text-amber-600 dark:text-amber-400 mt-0.5">{t.encryption.hint}</span>}
+                    </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={useEncryption} onChange={(e) => setUseEncryption(e.target.checked)} />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-amber-500"></div>
+                </label>
+            </div>
+            
+            {useEncryption && (
+                <div className="mt-3 animate-in fade-in slide-in-from-top-2">
+                    <input
+                        type="password"
+                        placeholder={t.encryption.placeholder}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full px-4 py-3 rounded-lg bg-white dark:bg-slate-950 border border-amber-300 dark:border-amber-800/50 focus:border-amber-500 outline-none transition-all text-slate-900 dark:text-white"
+                    />
+                </div>
+            )}
+        </div>
+
         {/* Color Picker */}
         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 block">{t.color}</label>
@@ -296,7 +397,12 @@ END:VCARD`;
                 level="M"
                 bgColor="#ffffff"
                 fgColor={fgColor}
-                imageSettings={mode === 'voice' ? {
+                imageSettings={useEncryption ? {
+                    src: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Lock_font_awesome.svg/512px-Lock_font_awesome.svg.png",
+                    height: 40,
+                    width: 40,
+                    excavate: true
+                } : mode === 'voice' ? {
                     src: "https://upload.wikimedia.org/wikipedia/commons/2/21/Speaker_Icon.svg",
                     height: 40,
                     width: 40,
@@ -306,12 +412,17 @@ END:VCARD`;
                     height: 40,
                     width: 40,
                     excavate: true
+                } : mode === 'wifi' ? {
+                    src: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/WiFi_Logo.svg/320px-WiFi_Logo.svg.png",
+                    height: 40,
+                    width: 40,
+                    excavate: true
                 } : undefined}
               />
             </div>
             
             <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400 font-medium truncate w-full px-4">
-                {mode === 'voice' ? 'Voice Message QR' : mode === 'vcard' ? vCard.name : generatedText}
+                {useEncryption ? '*** Encrypted Content ***' : mode === 'voice' ? 'Voice Message QR' : mode === 'vcard' ? vCard.name : mode === 'wifi' ? `WiFi: ${wifi.ssid}` : generatedText}
             </p>
 
             <div className="grid grid-cols-2 gap-3 w-full mt-6">

@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { Trash2, Download, FileText, Wifi, Globe, Link, Clock, Contact } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trash2, Download, FileText, Wifi, Globe, Clock, Contact, User, Lock } from 'lucide-react';
 import { translations } from '../translations';
 import { HistoryItem, ScanType } from '../types';
 
@@ -12,10 +12,8 @@ interface HistoryProps {
 }
 
 const History: React.FC<HistoryProps> = ({ history, onClear, onItemClick, t }) => {
-  const [showConfirm, setShowConfirm] = React.useState(false);
-
-  // New State for Segmented Control
-  const [filter, setFilter] = React.useState<'all' | 'scan' | 'generate'>('all');
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'scan' | 'generate'>('all');
 
   const handleExport = () => {
     if (history.length === 0) return;
@@ -46,6 +44,8 @@ const History: React.FC<HistoryProps> = ({ history, onClear, onItemClick, t }) =
         case 'wifi': return <Wifi className="w-5 h-5" />;
         case 'url': return <Globe className="w-5 h-5" />;
         case 'vcard': return <Contact className="w-5 h-5" />;
+        case 'audio': return <User className="w-5 h-5" />;
+        case 'crypto': return <Lock className="w-5 h-5" />;
         default: return <FileText className="w-5 h-5" />;
     }
   };
@@ -57,11 +57,39 @@ const History: React.FC<HistoryProps> = ({ history, onClear, onItemClick, t }) =
   };
 
   const getVCardName = (text: string) => {
-     // Robust regex matching consistent with ResultModal
-     const fnMatch = text.match(/(?:^|\n)FN(?:;[^:]*?)?:([^\n\r]+)/i);
-     if (fnMatch) return fnMatch[1].trim();
+     // Helper to extract value by key, handling potential params like ;CHARSET=UTF-8
+     // Matches start of line or string, Key, optional params, colon, then capture value until newline
+     const getValue = (key: string) => {
+        const regex = new RegExp(`(?:^|\\n)${key}(?:;[^:]*?)?:([^\\n\\r]+)`, 'i');
+        const match = text.match(regex);
+        return match ? match[1].trim() : null;
+     };
+
+     // 1. Try Formatted Name
+     const fn = getValue('FN');
+     if (fn) return fn;
+
+     // 2. Try Structured Name (Family;Given;...)
+     const n = getValue('N');
+     if (n) {
+        const parts = n.split(';');
+        const family = parts[0]?.trim() || '';
+        const given = parts[1]?.trim() || '';
+        if (given || family) return `${given} ${family}`.trim();
+     }
+     
+     // 3. Fallback to Organization
+     const org = getValue('ORG');
+     if (org) return org;
+
      return 'Contact Card';
   };
+
+  // Filter history based on source (assuming source is not currently in HistoryItem but we can infer or add later if needed)
+  // Since 'source' isn't fully piped through all types/localStorage in this snippet context yet, 
+  // we will display all, or rely on future 'source' property updates. 
+  // For now, we render the full list passed via props.
+  const displayHistory = history;
 
   return (
     <div className="w-full h-full flex flex-col bg-slate-50 dark:bg-slate-950">
@@ -91,29 +119,30 @@ const History: React.FC<HistoryProps> = ({ history, onClear, onItemClick, t }) =
        </div>
 
        <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-24">
-            {history.length === 0 ? (
+            {displayHistory.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-64 text-slate-400">
                     <Clock className="w-12 h-12 mb-3 opacity-20" />
                     <p>{t.empty}</p>
                 </div>
             ) : (
-                history.map((item) => (
+                displayHistory.map((item) => (
                     <div 
                         key={item.id}
                         onClick={() => onItemClick(item)}
                         className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-4 active:scale-98 transition-transform cursor-pointer"
                     >
-                        <div className={`p-3 rounded-full ${
+                        <div className={`p-3 rounded-full flex-shrink-0 ${
                             item.type === 'wifi' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' :
                             item.type === 'url' ? 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400' :
                             item.type === 'vcard' ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400' :
+                            item.type === 'crypto' ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400' :
                             'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                         }`}>
                             {getIcon(item.type)}
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
-                                {item.type === 'vcard' ? getVCardName(item.text) : item.text}
+                                {item.type === 'vcard' ? getVCardName(item.text) : item.type === 'crypto' ? '*** Encrypted ***' : item.text}
                             </p>
                             <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">{formatDate(item.timestamp)}</p>
                         </div>

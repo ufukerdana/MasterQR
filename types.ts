@@ -3,7 +3,7 @@ export type Tab = 'scan' | 'generate' | 'history';
 
 export type Language = 'en' | 'tr';
 
-export type ScanType = 'text' | 'url' | 'wifi' | 'audio' | 'vcard' | 'unknown';
+export type ScanType = 'text' | 'url' | 'wifi' | 'audio' | 'vcard' | 'crypto' | 'unknown';
 
 export interface QrMeta {
   color?: string;
@@ -15,6 +15,7 @@ export interface HistoryItem {
   type: ScanType;
   timestamp: number;
   meta?: QrMeta;
+  source?: 'scan' | 'generate';
 }
 
 export interface ScanResult {

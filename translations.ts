@@ -34,6 +34,12 @@ export const translations = {
         modeText: 'Text / URL',
         modeVoice: 'Voice',
         modeVCard: 'Contact',
+        modeWifi: 'Wi-Fi',
+        encryption: {
+            label: 'Password Protect',
+            placeholder: 'Set Password',
+            hint: 'Content will be encrypted. Password required to view.'
+        },
         voice: {
             tapToRecord: 'Tap to Record',
             recording: 'Recording...',
@@ -50,6 +56,14 @@ export const translations = {
             email: 'Email',
             org: 'Company / Org',
             title: 'Digital Business Card'
+        },
+        wifi: {
+            ssid: 'Network Name (SSID)',
+            password: 'Password',
+            encryption: 'Security',
+            wpa: 'WPA/WPA2',
+            wep: 'WEP',
+            none: 'None (Open)'
         }
     },
     result: {
@@ -75,6 +89,14 @@ export const translations = {
         vcard: {
             title: 'Contact Card',
             addToContacts: 'Add to Contacts'
+        },
+        crypto: {
+            title: 'Locked Content',
+            lockedDesc: 'This QR code is encrypted. Enter the password to unlock.',
+            enterPass: 'Enter Password',
+            unlock: 'Unlock',
+            wrongPass: 'Incorrect Password',
+            success: 'Unlocked Successfully'
         }
     },
     history: {
@@ -126,6 +148,12 @@ export const translations = {
         modeText: 'Metin / URL',
         modeVoice: 'Ses',
         modeVCard: 'Kartvizit',
+        modeWifi: 'Wi-Fi',
+        encryption: {
+            label: 'Şifre ile Koru',
+            placeholder: 'Şifre Belirleyin',
+            hint: 'İçerik şifrelenir. Görüntülemek için şifre gerekir.'
+        },
         voice: {
             tapToRecord: 'Kaydet',
             recording: 'Kaydediliyor...',
@@ -142,6 +170,14 @@ export const translations = {
             email: 'E-posta',
             org: 'Şirket / Kurum',
             title: 'Dijital Kartvizit'
+        },
+        wifi: {
+            ssid: 'Ağ Adı (SSID)',
+            password: 'Şifre',
+            encryption: 'Güvenlik',
+            wpa: 'WPA/WPA2',
+            wep: 'WEP',
+            none: 'Yok (Açık)'
         }
     },
     result: {
@@ -167,6 +203,14 @@ export const translations = {
         vcard: {
             title: 'Kişi Kartı',
             addToContacts: 'Rehbere Ekle'
+        },
+        crypto: {
+            title: 'Kilitli İçerik',
+            lockedDesc: 'Bu QR kod şifrelenmiştir. İçeriği görmek için şifreyi girin.',
+            enterPass: 'Şifreyi Girin',
+            unlock: 'Kilidi Aç',
+            wrongPass: 'Hatalı Şifre',
+            success: 'Kilit Açıldı'
         }
     },
     history: {
