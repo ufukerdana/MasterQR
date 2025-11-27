@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats, Html5QrcodeScannerState } from 'html5-qrcode';
-import { AlertCircle, Image as ImageIcon, Layers, Zap, RotateCcw, X, ExternalLink, Copy, Wifi, User, Phone, Lock } from 'lucide-react';
+import { AlertCircle, Image as ImageIcon, Layers, Zap, RotateCcw, X, ExternalLink, Copy, Wifi, User, Phone, Lock, SwitchCamera } from 'lucide-react';
 import { translations } from '../translations';
 import { ScanType } from '../types';
 import { isEncrypted, extractEncryptedData } from '../utils/crypto';
@@ -264,12 +264,18 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onBatchScan, isActive, t, bat
             <span className="text-[10px] font-bold text-white/90 bg-black/60 px-2 py-1 rounded-md backdrop-blur-md">{batchMode ? t.batchModeOn : t.batchModeOff}</span>
          </div>
 
-         {/* Camera Switch */}
-         <div className="flex flex-col items-center gap-2 mb-1">
-            <button onClick={toggleCamera} className="p-4 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-all active:scale-95 shadow-lg">
-                <RotateCcw className="w-7 h-7" />
-            </button>
-             <span className="text-[10px] font-bold text-white/90 bg-black/60 px-2 py-1 rounded-md backdrop-blur-md">{t.flip}</span>
+         {/* Camera Controls */}
+         <div className="flex items-end gap-3 mb-1">
+             <button onClick={toggleCamera} className="p-3 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-all active:scale-95 mb-6">
+                 <SwitchCamera className="w-6 h-6" />
+             </button>
+             
+             <div className="flex flex-col items-center gap-2">
+                <button onClick={toggleCamera} className="p-4 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-black/60 transition-all active:scale-95 shadow-lg">
+                    <RotateCcw className="w-7 h-7" />
+                </button>
+                 <span className="text-[10px] font-bold text-white/90 bg-black/60 px-2 py-1 rounded-md backdrop-blur-md">{t.flip}</span>
+             </div>
          </div>
          
          {/* Gallery */}
